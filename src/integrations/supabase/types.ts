@@ -50,6 +50,54 @@ export type Database = {
           },
         ]
       }
+      posts: {
+        Row: {
+          business_id: string
+          content: string
+          created_at: string | null
+          id: string
+          image_url: string | null
+          post_type: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          business_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          post_type?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          business_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          post_type?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posts_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profession_types: {
         Row: {
           created_at: string | null

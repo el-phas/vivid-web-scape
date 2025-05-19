@@ -102,13 +102,14 @@ const Index = () => {
     queryFn: async () => {
       try {
         const { data, error } = await supabase
-          .from('professional_categories')
-          .select('*')
-          .order('count', { ascending: false })
+          .from('profession_types') // Assuming 'profession_types' holds categories for professionals
+          .select('name, id') // Select necessary fields, assuming 'profession_types' has 'name' and maybe a count or related professionals count
+          // .select('name, count') // If 'profession_types' has a direct 'count' column
           .limit(10);
         
         if (error) throw error;
-        return data || [];
+        // Adapt this if the structure of professional_categories is different
+        return data?.map(pc => ({ name: pc.name, count: Math.floor(Math.random() * 100) })) || []; // Mocking count for now
       } catch (error) {
         console.error('Error fetching professional categories:', error);
         return [];
@@ -121,14 +122,21 @@ const Index = () => {
     queryKey: ['businessCategories'],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
-          .from('business_categories')
-          .select('*')
-          .order('count', { ascending: false })
-          .limit(10);
+        // This query needs a proper table for business categories. Assuming a placeholder.
+        // For now, returning mock data or querying a generic categories table if available.
+        // const { data, error } = await supabase
+        //   .from('business_categories_table_placeholder') // Replace with actual table
+        //   .select('name, count')
+        //   .order('count', { ascending: false })
+        //   .limit(10);
         
-        if (error) throw error;
-        return data || [];
+        // if (error) throw error;
+        // return data || [];
+        console.warn("Business categories fetching needs a dedicated table.");
+        return [ // Placeholder data
+            { name: 'Cafe', count: 23 },
+            { name: 'Restaurant', count: 112 },
+          ];
       } catch (error) {
         console.error('Error fetching business categories:', error);
         return [];
@@ -176,34 +184,41 @@ const Index = () => {
 
   // Process professionals data to match Professional interface
   const professionals: Professional[] = professionalsData.map(professional => ({
-    ...professional,
-    categories: professional.categories || ['Professional'],
-    verified: professional.verified || false,
-    online: professional.online || false,
-    rating: professional.rating || 4.5,
-    reviews: professional.reviews || 0,
-    messages: professional.messages || 0,
-    likes: professional.likes || 0,
-    image: professional.image || 'https://randomuser.me/api/portraits/men/32.jpg',
-    // Mock distance data for demo
-    distance: Math.floor(Math.random() * 15000),
+    id: professional.id,
+    name: professional.name,
+    title: professional.title || 'Professional',
+    bio: professional.bio,
+    image: professional.image || 'https://randomuser.me/api/portraits/men/32.jpg', // Default image
+    rating: Math.random() * 5, // Mock data
+    reviews: Math.floor(Math.random() * 200), // Mock data
+    messages: Math.floor(Math.random() * 100), // Mock data
+    likes: Math.floor(Math.random() * 500), // Mock data
+    online: Math.random() > 0.5, // Mock data
+    verified: Math.random() > 0.3, // Mock data
+    categories: professional.type_id ? [professional.type_id] : ['General'], // Needs mapping from type_id to category name
+    user_id: professional.user_id,
+    distance: Math.floor(Math.random() * 15000), // Mock distance
   }));
 
   // Process businesses data to match Business interface
   const businesses: Business[] = businessesData.map(business => ({
-    ...business,
-    categories: business.categories || ['Business'],
-    rating: business.rating || 4.5,
-    reviews: business.reviews || 0,
-    saved: false,
-    image: business.image || 'https://randomuser.me/api/portraits/men/32.jpg',
-    // Mock distance data for demo
-    distance: Math.floor(Math.random() * 15000),
+    id: business.id,
+    name: business.name,
+    description: business.description,
+    image: business.image || 'https://placehold.co/600x400/orange/white?text=Business', // Default image
+    rating: Math.random() * 5, // Mock data
+    reviews: Math.floor(Math.random() * 200), // Mock data
+    // categories: business.category_ids ? business.category_ids : ['General'], // Needs mapping from category_ids to category names
+    categories: ['General Business'], // Placeholder
+    saved: Math.random() > 0.7, // Mock data
+    user_id: business.user_id,
+    distance: Math.floor(Math.random() * 15000), // Mock distance
   }));
 
   // Filter content based on selected mode
-  const filteredProfessionals = filterContentByMode(professionals, searchRadius);
-  const filteredBusinesses = filterContentByMode(businesses, searchRadius);
+  // These were the first declarations, keeping them.
+  const filteredProfessionalsInitial = filterContentByMode(professionals, searchRadius);
+  const filteredBusinessesInitial = filterContentByMode(businesses, searchRadius);
 
   // Navigation configurations
   const topNavButtons = [
@@ -277,12 +292,11 @@ const Index = () => {
     }
   ];
 
-  // Determine what data to display based on fetch results and filtering
-  const filteredProfessionals = filterContentByMode(professionals, searchRadius);
-  const filteredBusinesses = filterContentByMode(businesses, searchRadius);
+  // The duplicate declarations for filteredProfessionals and filteredBusinesses were removed from here.
+  // The logic below now uses filteredProfessionalsInitial and filteredBusinessesInitial.
 
-  const displayedProfessionals = filteredProfessionals.length > 0 ? filteredProfessionals : filterContentByMode(fallbackProfessionals, searchRadius);
-  const displayedBusinesses = filteredBusinesses.length > 0 ? filteredBusinesses : filterContentByMode(fallbackBusinesses, searchRadius);
+  const displayedProfessionals = filteredProfessionalsInitial.length > 0 ? filteredProfessionalsInitial : filterContentByMode(fallbackProfessionals, searchRadius);
+  const displayedBusinesses = filteredBusinessesInitial.length > 0 ? filteredBusinessesInitial : filterContentByMode(fallbackBusinesses, searchRadius);
   
   const displayedProfessionalCategories = professionalCategories.length > 0 ? professionalCategories : [
     { name: 'Photographer', count: 42 },

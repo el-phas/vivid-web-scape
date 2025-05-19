@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Heart, Image, MessageCircle, Save, Plus, Trash2 } from 'lucide-react';
@@ -35,11 +34,11 @@ import {
 interface Post {
   id: string;
   content: string;
-  image: string | null;
+  image_url: string | null; // Changed from image to image_url
   created_at: string;
-  likes_count: number;
-  saves_count: number;
-  comments: number;
+  business_id: string; // Added to match table schema
+  user_id: string; // Added to match table schema
+  post_type?: string | null; // Added to match table schema
 }
 
 const BusinessPostsPage: React.FC = () => {
@@ -50,7 +49,7 @@ const BusinessPostsPage: React.FC = () => {
   const queryClient = useQueryClient();
   
   const [newPostContent, setNewPostContent] = useState('');
-  const [postImage, setPostImage] = useState<File | null>(null);
+  const [postImageFile, setPostImageFile] = useState<File | null>(null); // Renamed for clarity
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isCreatingPost, setIsCreatingPost] = useState(false);
   
@@ -79,14 +78,18 @@ const BusinessPostsPage: React.FC = () => {
     queryFn: async () => {
       if (!businessId) return [];
       
+      // Querying the 'posts' table now
       const { data, error } = await supabase
-        .from('posts')
+        .from('posts') 
         .select('*')
         .eq('business_id', businessId)
         .order('created_at', { ascending: false });
         
-      if (error) throw error;
-      return data || [];
+      if (error) {
+        console.error("Error fetching posts:", error);
+        throw error;
+      }
+      return (data as Post[]) || []; // Cast to Post[]
     },
     enabled: !!businessId,
   });
@@ -95,7 +98,7 @@ const BusinessPostsPage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    setPostImage(file);
+    setPostImageFile(file);
     setImagePreview(URL.createObjectURL(file));
   };
   
@@ -112,66 +115,68 @@ const BusinessPostsPage: React.FC = () => {
     setIsCreatingPost(true);
     
     try {
-      let imageUrl = null;
+      let publicImageUrl = null; // Renamed for clarity
       
-      // Upload image if there is one
-      if (postImage) {
-        const fileExt = postImage.name.split('.').pop();
+      if (postImageFile) {
+        const fileExt = postImageFile.name.split('.').pop();
         const fileName = `${nanoid()}.${fileExt}`;
-        const filePath = `post_images/${fileName}`;
+        // Using a more specific path for business post images
+        const filePath = `business_posts/${businessId}/${fileName}`;
         
-        // Ensure bucket exists
         const { data: buckets } = await supabase.storage.listBuckets();
-        const postsBucket = buckets?.find(bucket => bucket.name === 'posts');
+        const postsBucketExists = buckets?.find(bucket => bucket.name === 'posts_images'); // Consider a more specific bucket name
         
-        if (!postsBucket) {
-          await supabase.storage.createBucket('posts', {
-            public: true
+        if (!postsBucketExists) {
+          await supabase.storage.createBucket('posts_images', { // Bucket name for post images
+            public: true 
           });
         }
         
         const { error: uploadError } = await supabase.storage
-          .from('posts')
-          .upload(filePath, postImage);
+          .from('posts_images') // Use the specific bucket
+          .upload(filePath, postImageFile);
           
         if (uploadError) throw uploadError;
         
         const { data: urlData } = supabase.storage
-          .from('posts')
+          .from('posts_images') // Use the specific bucket
           .getPublicUrl(filePath);
           
-        imageUrl = urlData.publicUrl;
+        publicImageUrl = urlData.publicUrl;
       }
       
-      // Create the post
+      const newPostData = {
+        content: newPostContent.trim(),
+        image_url: publicImageUrl, // Storing the public URL
+        business_id: businessId,
+        user_id: user.id
+        // post_type could be added here if there's UI for it
+      };
+
       const { error } = await supabase
-        .from('posts')
-        .insert([{
-          content: newPostContent.trim(),
-          image: imageUrl,
-          business_id: businessId,
-          user_id: user.id
-        }]);
+        .from('posts') // Inserting into 'posts' table
+        .insert([newPostData]);
         
-      if (error) throw error;
+      if (error) {
+        console.error("Error creating post in DB:", error);
+        throw error;
+      }
       
       toast({
         title: "Success",
         description: "Post created successfully"
       });
       
-      // Reset form
       setNewPostContent('');
-      setPostImage(null);
+      setPostImageFile(null);
       setImagePreview(null);
       
-      // Refresh posts list
       queryClient.invalidateQueries({ queryKey: ['business-posts', businessId] });
     } catch (error) {
       console.error('Error creating post:', error);
       toast({
-        title: "Error",
-        description: "Failed to create post",
+        title: "Error creating post",
+        description: (error as Error).message || "Failed to create post. Check console for details.",
         variant: "destructive"
       });
     } finally {
@@ -183,12 +188,13 @@ const BusinessPostsPage: React.FC = () => {
     if (!postId || !businessId || !user) return;
     
     try {
+      // Deleting from 'posts' table
       const { error } = await supabase
-        .from('posts')
+        .from('posts') 
         .delete()
         .eq('id', postId)
-        .eq('business_id', businessId)
-        .eq('user_id', user.id);
+        .eq('business_id', businessId) // Ensure it's for this business
+        .eq('user_id', user.id); // Ensure user owns this post (redundant if RLS handles but good for safety)
         
       if (error) throw error;
       
@@ -247,11 +253,11 @@ const BusinessPostsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100 pb-16">
       <div className="bg-white p-4 flex items-center">
-        <button onClick={() => navigate('/business/manage')} className="mr-3">
+        <button onClick={() => navigate(`/business/manage/${businessId}`)} className="mr-3"> {/* Corrected navigation path */}
           <ArrowLeft size={20} />
         </button>
         <div className="flex-1">
-          <h1 className="text-lg font-bold">{business.name}</h1>
+          <h1 className="text-lg font-bold">{business?.name || 'Business Posts'}</h1>
           <p className="text-xs text-gray-500">Manage Posts</p>
         </div>
       </div>
@@ -322,10 +328,10 @@ const BusinessPostsPage: React.FC = () => {
           <div className="space-y-4">
             {posts.map((post) => (
               <Card key={post.id} className="overflow-hidden">
-                {post.image && (
+                {post.image_url && ( // Changed from post.image to post.image_url
                   <AspectRatio ratio={16 / 9}>
                     <img 
-                      src={post.image} 
+                      src={post.image_url} // Changed from post.image to post.image_url
                       alt="Post" 
                       className="object-cover w-full h-full" 
                     />
@@ -340,19 +346,12 @@ const BusinessPostsPage: React.FC = () => {
                 </CardContent>
                 
                 <CardFooter className="p-4 pt-0 flex justify-between">
+                  {/* Removed likes, comments, saves display as these fields are not in the new posts table */}
+                  {/* We can add these features back later if needed */}
                   <div className="flex items-center space-x-4">
-                    <div className="flex items-center text-gray-500">
-                      <Heart size={18} className="mr-1" />
-                      <span>{post.likes_count || 0}</span>
-                    </div>
-                    <div className="flex items-center text-gray-500">
-                      <MessageCircle size={18} className="mr-1" />
-                      <span>{post.comments || 0}</span>
-                    </div>
-                    <div className="flex items-center text-gray-500">
-                      <Save size={18} className="mr-1" />
-                      <span>{post.saves_count || 0}</span>
-                    </div>
+                     {/* Example: if you want to show post type
+                     {post.post_type && <span className="text-xs text-gray-400">{post.post_type}</span>} 
+                     */}
                   </div>
                   
                   <Button
