@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -8,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import TopNavigation from '@/components/TopNavigation';
 import { nanoid } from 'nanoid';
+import { Tables, TablesUpdate } from '@/integrations/supabase/types';
 
 import {
   Form,
@@ -26,8 +26,10 @@ type ProfessionalFormData = {
   name: string;
   title: string;
   bio: string;
-  image?: string;
+  // image is handled separately
 };
+
+type ProfessionalType = Tables<'professionals'>;
 
 const ProfessionEditPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,8 +39,8 @@ const ProfessionEditPage = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [profession, setProfession] = useState<any>(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [currentProfession, setCurrentProfession] = useState<ProfessionalType | null>(null);
 
   const form = useForm<ProfessionalFormData>({
     defaultValues: {
@@ -54,14 +56,14 @@ const ProfessionEditPage = () => {
         navigate('/auth');
         return;
       }
-
       if (!id) {
         navigate('/profession/manage');
+        toast({ title: "Error", description: "Professional profile ID is missing.", variant: "destructive" });
         return;
       }
 
       try {
-        setIsLoading(true);
+        setIsLoadingData(true);
         const { data, error } = await supabase
           .from('professionals')
           .select('*')
@@ -69,7 +71,18 @@ const ProfessionEditPage = () => {
           .eq('user_id', user.id)
           .single();
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === 'PGRST116') {
+                 toast({
+                    title: "Not Found",
+                    description: "Professional profile not found or you don't have permission to edit it.",
+                    variant: "destructive"
+                });
+                navigate('/profession/manage');
+                return;
+            }
+            throw error;
+        }
         if (!data) {
           toast({
             title: "Not Found",
@@ -80,7 +93,7 @@ const ProfessionEditPage = () => {
           return;
         }
 
-        setProfession(data);
+        setCurrentProfession(data as ProfessionalType);
         setImagePreview(data.image || null);
         
         form.reset({
@@ -92,12 +105,12 @@ const ProfessionEditPage = () => {
         console.error('Error fetching professional profile:', error);
         toast({
           title: "Error",
-          description: "Could not load professional profile information",
+          description: `Could not load professional profile: ${error instanceof Error ? error.message : String(error)}`,
           variant: "destructive"
         });
         navigate('/profession/manage');
       } finally {
-        setIsLoading(false);
+        setIsLoadingData(false);
       }
     };
 
@@ -117,10 +130,10 @@ const ProfessionEditPage = () => {
   };
 
   const onSubmit = async (data: ProfessionalFormData) => {
-    if (!user || !id) {
+    if (!user || !id || !currentProfession) {
       toast({
         title: "Error",
-        description: "You must be logged in and have a valid profile ID",
+        description: "User not authenticated, profile ID missing, or profile data not loaded.",
         variant: "destructive"
       });
       return;
@@ -128,55 +141,48 @@ const ProfessionEditPage = () => {
 
     try {
       setIsSubmitting(true);
-      let imageUrl = profession?.image || '';
+      let imageUrl: string | null = currentProfession.image;
 
-      // Upload new image if selected
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${nanoid()}.${fileExt}`;
         const filePath = `professional_images/${fileName}`;
 
-        // Ensure the storage bucket exists
         const { data: buckets } = await supabase.storage.listBuckets();
         const profBucket = buckets?.find(bucket => bucket.name === 'professionals');
         
         if (!profBucket) {
-          // Create the bucket if it doesn't exist
           const { error: createBucketError } = await supabase.storage.createBucket('professionals', {
-            public: true
+            public: true,
+            allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif'],
+            fileSizeLimit: 1024 * 1024 * 5
           });
-          
-          if (createBucketError) {
-            console.error('Error creating bucket:', createBucketError);
-          }
+          if (createBucketError) console.error('Error creating bucket:', createBucketError);
         }
 
         const { error: uploadError } = await supabase.storage
           .from('professionals')
           .upload(filePath, imageFile);
 
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw uploadError;
-        }
+        if (uploadError) throw uploadError;
 
         const { data: urlData } = supabase.storage
           .from('professionals')
           .getPublicUrl(filePath);
-
         imageUrl = urlData.publicUrl;
       }
 
-      // Update professional profile
+      const updateData: TablesUpdate<'professionals'> = {
+        name: data.name,
+        title: data.title,
+        bio: data.bio,
+        image: imageUrl,
+        updated_at: new Date().toISOString(),
+      };
+
       const { error } = await supabase
         .from('professionals')
-        .update({
-          name: data.name,
-          title: data.title,
-          bio: data.bio,
-          image: imageUrl,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', id)
         .eq('user_id', user.id);
 
@@ -186,13 +192,12 @@ const ProfessionEditPage = () => {
         title: "Success!",
         description: "Professional profile has been updated.",
       });
-
       navigate('/profession/manage');
     } catch (error) {
       console.error('Error updating professional profile:', error);
       toast({
         title: "Error",
-        description: "Failed to update professional profile. Please try again.",
+        description: `Failed to update profile: ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive"
       });
     } finally {
@@ -200,7 +205,7 @@ const ProfessionEditPage = () => {
     }
   };
 
-  if (isLoading) {
+  if (isLoadingData) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700"></div>
@@ -257,6 +262,7 @@ const ProfessionEditPage = () => {
               <FormField
                 control={form.control}
                 name="name"
+                rules={{ required: "Full name is required" }}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Full Name</FormLabel>
@@ -271,6 +277,7 @@ const ProfessionEditPage = () => {
               <FormField
                 control={form.control}
                 name="title"
+                rules={{ required: "Professional title is required" }}
                 render={({ field }) => (
                   <FormItem className="mt-4">
                     <FormLabel>Professional Title</FormLabel>

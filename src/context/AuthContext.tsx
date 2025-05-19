@@ -9,7 +9,7 @@ type AuthContextType = {
   user: User | null;
   signUp: (email: string, password: string, metadata?: { first_name?: string; last_name?: string }) => Promise<{ error: any | null }>;
   signIn: (email: string, password: string) => Promise<{ error: any | null }>;
-  signOut: () => Promise<{ error: any | null }>;
+  signOut: () => Promise<{ error: any | null }>; // Changed from logout to signOut
   loading: boolean;
 };
 
@@ -32,7 +32,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (event === 'SIGNED_IN' && window.location.pathname === '/auth') {
           navigate('/');
         } else if (event === 'SIGNED_OUT') {
-          navigate('/auth');
+          // Check if already on /auth to prevent loop, or if other specific public pages should be allowed
+          if (window.location.pathname !== '/auth') {
+            navigate('/auth');
+          }
         }
       }
     );
@@ -50,11 +53,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [navigate]);
 
   const signUp = async (email: string, password: string, metadata?: { first_name?: string; last_name?: string }) => {
+    // The handle_new_user trigger expects first_name and last_name in raw_user_meta_data
+    // to potentially populate the profiles table.
+    // Let's ensure user_metadata is passed correctly.
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: metadata
+        data: metadata // This passes metadata to raw_user_meta_data
       }
     });
     return { error };
@@ -68,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error };
   };
 
-  const signOut = async () => {
+  const signOut = async () => { // Renamed from logout
     const { error } = await supabase.auth.signOut();
     return { error };
   };
@@ -87,3 +93,4 @@ export function useAuth() {
   }
   return context;
 }
+

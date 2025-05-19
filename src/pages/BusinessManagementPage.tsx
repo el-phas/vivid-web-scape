@@ -8,6 +8,9 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
 import { useQuery } from '@tanstack/react-query';
+import { Tables } from '@/integrations/supabase/types'; // Import Tables type
+
+type BusinessType = Tables<'businesses'>; // Use Tables type
 
 const BusinessManagementPage = () => {
   const navigate = useNavigate();
@@ -15,11 +18,14 @@ const BusinessManagementPage = () => {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
-  const { data: businesses = [], isLoading, refetch } = useQuery({
+  const { data: businesses = [], isLoading, refetch } = useQuery<BusinessType[], Error>({ // Type useQuery
     queryKey: ['user-businesses', user?.id],
     queryFn: async () => {
       if (!user) {
-        navigate('/auth');
+        // This navigation should ideally be handled by a ProtectedRoute component
+        // or higher up in the component tree.
+        // For now, returning empty array if not logged in.
+        // navigate('/auth'); // Consider removing direct navigation from queryFn
         return [];
       }
 
@@ -30,8 +36,7 @@ const BusinessManagementPage = () => {
           .eq('user_id', user.id);
 
         if (error) throw error;
-
-        return data || [];
+        return (data as BusinessType[]) || [];
       } catch (error) {
         console.error('Error fetching businesses:', error);
         toast({
@@ -42,7 +47,7 @@ const BusinessManagementPage = () => {
         return [];
       }
     },
-    enabled: !!user
+    enabled: !!user // Query will only run if user is available
   });
 
   const handleCreateBusiness = () => {
@@ -62,12 +67,14 @@ const BusinessManagementPage = () => {
   };
 
   const handleDeleteBusiness = async (id: string) => {
+    if (!user) return;
     try {
       setIsDeleting(id);
       const { error } = await supabase
         .from('businesses')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id); // Ensure user can only delete their own
 
       if (error) throw error;
 
@@ -159,14 +166,20 @@ const BusinessManagementPage = () => {
                     <button
                       onClick={() => handleEditBusiness(business.id)}
                       className="p-2 rounded-full bg-gray-100"
+                      disabled={isDeleting === business.id}
                     >
                       <Edit2 size={16} className="text-gray-600" />
                     </button>
                     <button
                       onClick={() => handleDeleteBusiness(business.id)}
                       className="p-2 rounded-full bg-red-100"
+                      disabled={isDeleting === business.id}
                     >
-                      <Trash2 size={16} className="text-red-600" />
+                       {isDeleting === business.id ? (
+                        <div className="h-4 w-4 border-2 border-t-red-500 rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 size={16} className="text-red-600" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -189,3 +202,4 @@ const BusinessManagementPage = () => {
 };
 
 export default BusinessManagementPage;
+

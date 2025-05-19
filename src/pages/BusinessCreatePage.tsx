@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -8,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import TopNavigation from '@/components/TopNavigation';
 import { nanoid } from 'nanoid';
+import { TablesInsert } from '@/integrations/supabase/types'; // Import TablesInsert
 
 import {
   Form,
@@ -71,22 +71,25 @@ const BusinessCreatePage = () => {
 
     try {
       setIsSubmitting(true);
-      let imageUrl = '';
+      let imageUrl: string | null = null;
 
-      // Upload image if selected
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${nanoid()}.${fileExt}`;
         const filePath = `business_images/${fileName}`;
 
-        // Ensure the storage bucket exists
-        const { data: buckets } = await supabase.storage.listBuckets();
+        const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+        if (listError) {
+            console.error('Error listing buckets:', listError);
+        }
+
         const businessBucket = buckets?.find(bucket => bucket.name === 'businesses');
         
         if (!businessBucket) {
-          // Create the bucket if it doesn't exist
           const { error: createBucketError } = await supabase.storage.createBucket('businesses', {
-            public: true
+            public: true,
+            allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif'],
+            fileSizeLimit: 1024 * 1024 * 5
           });
           
           if (createBucketError) {
@@ -110,20 +113,20 @@ const BusinessCreatePage = () => {
         imageUrl = urlData.publicUrl;
       }
 
-      // Create contact info JSON
       const contactInfo = {
         email: data.contactEmail || null,
         phone: data.contactPhone || null,
       };
 
-      // Create business
-      const { error } = await supabase.from('businesses').insert({
+      const businessData: TablesInsert<'businesses'> = {
         user_id: user.id,
         name: data.name,
         description: data.description,
-        image: imageUrl || null,
+        image: imageUrl,
         contact_info: contactInfo,
-      });
+      };
+
+      const { error } = await supabase.from('businesses').insert(businessData);
 
       if (error) throw error;
 
@@ -137,7 +140,7 @@ const BusinessCreatePage = () => {
       console.error('Error creating business:', error);
       toast({
         title: "Error",
-        description: "Failed to create business. Please try again.",
+        description: `Failed to create business: ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive"
       });
     } finally {
@@ -194,6 +197,7 @@ const BusinessCreatePage = () => {
               <FormField
                 control={form.control}
                 name="name"
+                rules={{ required: "Business name is required" }}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Business Name</FormLabel>

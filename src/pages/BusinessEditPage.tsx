@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import TopNavigation from '@/components/TopNavigation';
 import { nanoid } from 'nanoid';
+import { Tables, TablesUpdate } from '@/integrations/supabase/types';
 
 import {
   Form,
@@ -28,6 +29,8 @@ type BusinessFormData = {
   contactPhone?: string;
 };
 
+type BusinessType = Tables<'businesses'>;
+
 const BusinessEditPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -36,8 +39,8 @@ const BusinessEditPage = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [business, setBusiness] = useState<any>(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [currentBusiness, setCurrentBusiness] = useState<BusinessType | null>(null);
 
   const form = useForm<BusinessFormData>({
     defaultValues: {
@@ -54,14 +57,14 @@ const BusinessEditPage = () => {
         navigate('/auth');
         return;
       }
-
       if (!id) {
         navigate('/business/manage');
+        toast({ title: "Error", description: "Business ID is missing.", variant: "destructive" });
         return;
       }
 
       try {
-        setIsLoading(true);
+        setIsLoadingData(true);
         const { data, error } = await supabase
           .from('businesses')
           .select('*')
@@ -69,7 +72,19 @@ const BusinessEditPage = () => {
           .eq('user_id', user.id)
           .single();
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === 'PGRST116') {
+                 toast({
+                    title: "Not Found",
+                    description: "Business not found or you don't have permission to edit it.",
+                    variant: "destructive"
+                });
+                navigate('/business/manage');
+                return;
+            }
+            throw error;
+        }
+        
         if (!data) {
           toast({
             title: "Not Found",
@@ -80,32 +95,27 @@ const BusinessEditPage = () => {
           return;
         }
 
-        setBusiness(data);
+        setCurrentBusiness(data as BusinessType);
         setImagePreview(data.image || null);
         
-        // Handle contact_info properly, checking if it exists and is an object
-        const contactInfo = data.contact_info || {};
-        const contactEmail = typeof contactInfo === 'object' && contactInfo !== null ? 
-          (contactInfo as any).email || '' : '';
-        const contactPhone = typeof contactInfo === 'object' && contactInfo !== null ? 
-          (contactInfo as any).phone || '' : '';
+        const contactInfo = data.contact_info as { email?: string, phone?: string } | null;
         
         form.reset({
           name: data.name || '',
           description: data.description || '',
-          contactEmail: contactEmail,
-          contactPhone: contactPhone,
+          contactEmail: contactInfo?.email || '',
+          contactPhone: contactInfo?.phone || '',
         });
       } catch (error) {
         console.error('Error fetching business:', error);
         toast({
           title: "Error",
-          description: "Could not load business information",
+          description: `Could not load business information: ${error instanceof Error ? error.message : String(error)}`,
           variant: "destructive"
         });
         navigate('/business/manage');
       } finally {
-        setIsLoading(false);
+        setIsLoadingData(false);
       }
     };
 
@@ -125,10 +135,10 @@ const BusinessEditPage = () => {
   };
 
   const onSubmit = async (data: BusinessFormData) => {
-    if (!user || !id) {
+    if (!user || !id || !currentBusiness) {
       toast({
         title: "Error",
-        description: "You must be logged in and have a valid business ID",
+        description: "User not authenticated, business ID missing, or business data not loaded.",
         variant: "destructive"
       });
       return;
@@ -136,61 +146,53 @@ const BusinessEditPage = () => {
 
     try {
       setIsSubmitting(true);
-      let imageUrl = business?.image || '';
+      let imageUrl: string | null = currentBusiness.image;
 
-      // Upload new image if selected
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${nanoid()}.${fileExt}`;
         const filePath = `business_images/${fileName}`;
 
-        // Ensure the storage bucket exists
         const { data: buckets } = await supabase.storage.listBuckets();
         const businessBucket = buckets?.find(bucket => bucket.name === 'businesses');
         
         if (!businessBucket) {
-          // Create the bucket if it doesn't exist
           const { error: createBucketError } = await supabase.storage.createBucket('businesses', {
-            public: true
+            public: true,
+            allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif'],
+            fileSizeLimit: 1024 * 1024 * 5
           });
-          
-          if (createBucketError) {
-            console.error('Error creating bucket:', createBucketError);
-          }
+          if (createBucketError) console.error('Error creating bucket:', createBucketError);
         }
 
         const { error: uploadError } = await supabase.storage
           .from('businesses')
           .upload(filePath, imageFile);
 
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw uploadError;
-        }
+        if (uploadError) throw uploadError;
 
         const { data: urlData } = supabase.storage
           .from('businesses')
           .getPublicUrl(filePath);
-
         imageUrl = urlData.publicUrl;
       }
 
-      // Update contact info JSON
       const contactInfo = {
         email: data.contactEmail || null,
         phone: data.contactPhone || null,
       };
 
-      // Update business
+      const updateData: TablesUpdate<'businesses'> = {
+        name: data.name,
+        description: data.description,
+        image: imageUrl,
+        contact_info: contactInfo,
+        updated_at: new Date().toISOString(),
+      };
+
       const { error } = await supabase
         .from('businesses')
-        .update({
-          name: data.name,
-          description: data.description,
-          image: imageUrl,
-          contact_info: contactInfo,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', id)
         .eq('user_id', user.id);
 
@@ -200,13 +202,12 @@ const BusinessEditPage = () => {
         title: "Success!",
         description: "Business details have been updated.",
       });
-
       navigate('/business/manage');
     } catch (error) {
       console.error('Error updating business:', error);
       toast({
         title: "Error",
-        description: "Failed to update business. Please try again.",
+        description: `Failed to update business: ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive"
       });
     } finally {
@@ -214,7 +215,7 @@ const BusinessEditPage = () => {
     }
   };
 
-  if (isLoading) {
+  if (isLoadingData) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700"></div>
@@ -271,6 +272,7 @@ const BusinessEditPage = () => {
               <FormField
                 control={form.control}
                 name="name"
+                rules={{ required: "Business name is required" }}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Business Name</FormLabel>

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -7,7 +8,7 @@ import TopNavigation from '@/components/TopNavigation';
 
 const AccountPage = () => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { signOut } = useAuth(); // Changed from logout to signOut
   const [locationValue, setLocationValue] = useState("local");
   const [activeTab, setActiveTab] = useState('account');
 
@@ -17,8 +18,8 @@ const AccountPage = () => {
 
   const handleLogout = async () => {
     try {
-      await logout();
-      navigate('/auth');
+      await signOut(); // Changed from logout to signOut
+      // Navigation is handled by AuthContext's onAuthStateChange
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -42,6 +43,24 @@ const AccountPage = () => {
           <p className="text-gray-700 dark:text-gray-300">
             Here you can manage your account settings and profile information.
           </p>
+           <button
+            onClick={() => navigate('/profile/edit')}
+            className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          >
+            Edit Profile
+          </button>
+           <button
+            onClick={() => navigate('/business/manage')}
+            className="mt-4 ml-2 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          >
+            Manage Businesses
+          </button>
+          <button
+            onClick={() => navigate('/profession/manage')}
+            className="mt-4 ml-2 bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          >
+            Manage Professional Profiles
+          </button>
         </div>
 
         <div className="mt-6">
@@ -60,3 +79,4 @@ const AccountPage = () => {
 };
 
 export default AccountPage;
+

@@ -9,7 +9,152 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      businesses: {
+        Row: {
+          contact_info: Json | null
+          created_at: string | null
+          description: string | null
+          id: string
+          image: string | null
+          name: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          contact_info?: Json | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image?: string | null
+          name: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          contact_info?: Json | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image?: string | null
+          name?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "businesses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profession_types: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      professionals: {
+        Row: {
+          bio: string | null
+          created_at: string | null
+          id: string
+          image: string | null
+          name: string
+          title: string | null
+          type_id: string | null
+          updated_at: string | null
+          user_id: string
+          working_hours: Json | null
+        }
+        Insert: {
+          bio?: string | null
+          created_at?: string | null
+          id?: string
+          image?: string | null
+          name: string
+          title?: string | null
+          type_id?: string | null
+          updated_at?: string | null
+          user_id: string
+          working_hours?: Json | null
+        }
+        Update: {
+          bio?: string | null
+          created_at?: string | null
+          id?: string
+          image?: string | null
+          name?: string
+          title?: string | null
+          type_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+          working_hours?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professionals_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "profession_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professionals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          full_name: string | null
+          id: string
+          updated_at: string | null
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

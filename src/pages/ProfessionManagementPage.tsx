@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ArrowLeft, Plus, Edit2, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -8,6 +7,9 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
 import { useQuery } from '@tanstack/react-query';
+import { Tables } from '@/integrations/supabase/types'; // Import Tables type
+
+type ProfessionalType = Tables<'professionals'>; // Use Tables type
 
 const ProfessionManagementPage = () => {
   const navigate = useNavigate();
@@ -15,11 +17,11 @@ const ProfessionManagementPage = () => {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
-  const { data: professionals = [], isLoading, refetch } = useQuery({
+  const { data: professionals = [], isLoading, refetch } = useQuery<ProfessionalType[], Error>({ // Type useQuery
     queryKey: ['user-professionals', user?.id],
     queryFn: async () => {
       if (!user) {
-        navigate('/auth');
+        // navigate('/auth'); // Consider removing
         return [];
       }
 
@@ -30,8 +32,7 @@ const ProfessionManagementPage = () => {
           .eq('user_id', user.id);
 
         if (error) throw error;
-
-        return data || [];
+        return (data as ProfessionalType[]) || [];
       } catch (error) {
         console.error('Error fetching professionals:', error);
         toast({
@@ -54,12 +55,14 @@ const ProfessionManagementPage = () => {
   };
 
   const handleDeleteProfession = async (id: string) => {
+    if(!user) return;
     try {
       setIsDeleting(id);
       const { error } = await supabase
         .from('professionals')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id); // Ensure only own profiles are deleted
 
       if (error) throw error;
 
@@ -133,6 +136,7 @@ const ProfessionManagementPage = () => {
                     <button
                       onClick={() => handleEditProfession(professional.id)}
                       className="p-2 rounded-full bg-gray-100"
+                      disabled={isDeleting === professional.id}
                     >
                       <Edit2 size={16} className="text-gray-600" />
                     </button>
