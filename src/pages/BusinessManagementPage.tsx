@@ -8,24 +8,20 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
 import { useQuery } from '@tanstack/react-query';
-import { Tables } from '@/integrations/supabase/types'; // Import Tables type
+import { Tables } from '@/integrations/supabase/types';
 
-type BusinessType = Tables<'businesses'>; // Use Tables type
+type BusinessType = Tables<'businesses'>;
 
 const BusinessManagementPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
-  const { data: businesses = [], isLoading, refetch } = useQuery<BusinessType[], Error>({ // Type useQuery
+  const { data: businesses = [], isLoading, refetch } = useQuery<BusinessType[], Error>({
     queryKey: ['user-businesses', user?.id],
     queryFn: async () => {
       if (!user) {
-        // This navigation should ideally be handled by a ProtectedRoute component
-        // or higher up in the component tree.
-        // For now, returning empty array if not logged in.
-        // navigate('/auth'); // Consider removing direct navigation from queryFn
         return [];
       }
 
@@ -33,7 +29,7 @@ const BusinessManagementPage = () => {
         const { data, error } = await supabase
           .from('businesses')
           .select('*')
-          .eq('user_id', user.id);
+          .eq('user_id', parseInt(user.id)); // Convert string to number
 
         if (error) throw error;
         return (data as BusinessType[]) || [];
@@ -47,34 +43,34 @@ const BusinessManagementPage = () => {
         return [];
       }
     },
-    enabled: !!user // Query will only run if user is available
+    enabled: !!user
   });
 
   const handleCreateBusiness = () => {
     navigate('/business/create');
   };
 
-  const handleEditBusiness = (id: string) => {
-    navigate(`/business/edit/${id}`);
+  const handleEditBusiness = (businessId: number) => {
+    navigate(`/business/edit/${businessId}`);
   };
 
-  const handleManageProducts = (id: string) => {
-    navigate(`/business/${id}/products`);
+  const handleManageProducts = (businessId: number) => {
+    navigate(`/business/${businessId}/products`);
   };
   
-  const handleManagePosts = (id: string) => {
-    navigate(`/business/${id}/posts`);
+  const handleManagePosts = (businessId: number) => {
+    navigate(`/business/${businessId}/posts`);
   };
 
-  const handleDeleteBusiness = async (id: string) => {
+  const handleDeleteBusiness = async (businessId: number) => {
     if (!user) return;
     try {
-      setIsDeleting(id);
+      setIsDeleting(businessId);
       const { error } = await supabase
         .from('businesses')
         .delete()
-        .eq('id', id)
-        .eq('user_id', user.id); // Ensure user can only delete their own
+        .eq('business_id', businessId)
+        .eq('user_id', parseInt(user.id));
 
       if (error) throw error;
 
@@ -120,22 +116,12 @@ const BusinessManagementPage = () => {
         ) : businesses.length > 0 ? (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
             {businesses.map((business) => (
-              <div key={business.id} className="p-4 border-b">
+              <div key={business.business_id} className="p-4 border-b">
                 <div className="flex items-center">
                   <div className="mr-3">
-                    {business.image ? (
-                      <div className="w-16 h-16 rounded-lg overflow-hidden">
-                        <img
-                          src={business.image}
-                          alt={business.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center">
-                        <span className="text-gray-500">No Image</span>
-                      </div>
-                    )}
+                    <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center">
+                      <span className="text-gray-500">No Image</span>
+                    </div>
                   </div>
                   <div className="flex-1">
                     <h3 className="font-medium">{business.name}</h3>
@@ -143,10 +129,9 @@ const BusinessManagementPage = () => {
                       {business.description || "No description available"}
                     </p>
                     
-                    {/* Management options */}
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button 
-                        onClick={() => handleManageProducts(business.id)}
+                        onClick={() => handleManageProducts(business.business_id)}
                         className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded flex items-center"
                       >
                         <Package size={14} className="mr-1" />
@@ -154,7 +139,7 @@ const BusinessManagementPage = () => {
                       </button>
                       
                       <button 
-                        onClick={() => handleManagePosts(business.id)}
+                        onClick={() => handleManagePosts(business.business_id)}
                         className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded flex items-center"
                       >
                         <FileText size={14} className="mr-1" />
@@ -164,18 +149,18 @@ const BusinessManagementPage = () => {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleEditBusiness(business.id)}
+                      onClick={() => handleEditBusiness(business.business_id)}
                       className="p-2 rounded-full bg-gray-100"
-                      disabled={isDeleting === business.id}
+                      disabled={isDeleting === business.business_id}
                     >
                       <Edit2 size={16} className="text-gray-600" />
                     </button>
                     <button
-                      onClick={() => handleDeleteBusiness(business.id)}
+                      onClick={() => handleDeleteBusiness(business.business_id)}
                       className="p-2 rounded-full bg-red-100"
-                      disabled={isDeleting === business.id}
+                      disabled={isDeleting === business.business_id}
                     >
-                       {isDeleting === business.id ? (
+                       {isDeleting === business.business_id ? (
                         <div className="h-4 w-4 border-2 border-t-red-500 rounded-full animate-spin" />
                       ) : (
                         <Trash2 size={16} className="text-red-600" />
@@ -202,4 +187,3 @@ const BusinessManagementPage = () => {
 };
 
 export default BusinessManagementPage;
-

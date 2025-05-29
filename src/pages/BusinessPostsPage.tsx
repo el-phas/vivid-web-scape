@@ -1,29 +1,15 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Heart, Image, MessageCircle, Save, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import TopNavigation from '@/components/TopNavigation';
-import { nanoid } from 'nanoid';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
-import { Separator } from '@/components/ui/separator';
 import {
   Card,
   CardContent,
@@ -32,25 +18,21 @@ import {
 } from "@/components/ui/card";
 
 interface Post {
-  id: string;
+  post_id: number;
   content: string;
-  image_url: string | null; // Changed from image to image_url
   created_at: string;
-  business_id: string; // Added to match table schema
-  user_id: string; // Added to match table schema
-  post_type?: string | null; // Added to match table schema
+  user_id: number;
 }
 
 const BusinessPostsPage: React.FC = () => {
-  const { id: businessId } = useParams<{ id: string }>();
+  const { id: businessIdParam } = useParams<{ id: string }>();
+  const businessId = businessIdParam ? parseInt(businessIdParam) : null;
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   
   const [newPostContent, setNewPostContent] = useState('');
-  const [postImageFile, setPostImageFile] = useState<File | null>(null); // Renamed for clarity
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isCreatingPost, setIsCreatingPost] = useState(false);
   
   // Check if user owns this business
@@ -62,8 +44,8 @@ const BusinessPostsPage: React.FC = () => {
       const { data, error } = await supabase
         .from('businesses')
         .select('*')
-        .eq('id', businessId)
-        .eq('user_id', user.id)
+        .eq('business_id', businessId)
+        .eq('user_id', parseInt(user.id))
         .single();
         
       if (error) throw error;
@@ -72,38 +54,29 @@ const BusinessPostsPage: React.FC = () => {
     enabled: !!businessId && !!user,
   });
   
-  // Fetch posts for this business
+  // Fetch posts for this business - simplified to just get user posts for now
   const { data: posts = [], isLoading: postsLoading } = useQuery({
     queryKey: ['business-posts', businessId],
     queryFn: async () => {
-      if (!businessId) return [];
+      if (!user) return [];
       
-      // Querying the 'posts' table now
       const { data, error } = await supabase
         .from('posts') 
         .select('*')
-        .eq('business_id', businessId)
+        .eq('user_id', parseInt(user.id))
         .order('created_at', { ascending: false });
         
       if (error) {
         console.error("Error fetching posts:", error);
         throw error;
       }
-      return (data as Post[]) || []; // Cast to Post[]
+      return (data as Post[]) || [];
     },
-    enabled: !!businessId,
+    enabled: !!user,
   });
   
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setPostImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-  };
-  
   const handleCreatePost = async () => {
-    if (!newPostContent.trim() || !businessId || !user) {
+    if (!newPostContent.trim() || !user) {
       toast({
         title: "Error",
         description: "Post content is required",
@@ -115,46 +88,13 @@ const BusinessPostsPage: React.FC = () => {
     setIsCreatingPost(true);
     
     try {
-      let publicImageUrl = null; // Renamed for clarity
-      
-      if (postImageFile) {
-        const fileExt = postImageFile.name.split('.').pop();
-        const fileName = `${nanoid()}.${fileExt}`;
-        // Using a more specific path for business post images
-        const filePath = `business_posts/${businessId}/${fileName}`;
-        
-        const { data: buckets } = await supabase.storage.listBuckets();
-        const postsBucketExists = buckets?.find(bucket => bucket.name === 'posts_images'); // Consider a more specific bucket name
-        
-        if (!postsBucketExists) {
-          await supabase.storage.createBucket('posts_images', { // Bucket name for post images
-            public: true 
-          });
-        }
-        
-        const { error: uploadError } = await supabase.storage
-          .from('posts_images') // Use the specific bucket
-          .upload(filePath, postImageFile);
-          
-        if (uploadError) throw uploadError;
-        
-        const { data: urlData } = supabase.storage
-          .from('posts_images') // Use the specific bucket
-          .getPublicUrl(filePath);
-          
-        publicImageUrl = urlData.publicUrl;
-      }
-      
       const newPostData = {
         content: newPostContent.trim(),
-        image_url: publicImageUrl, // Storing the public URL
-        business_id: businessId,
-        user_id: user.id
-        // post_type could be added here if there's UI for it
+        user_id: parseInt(user.id)
       };
 
       const { error } = await supabase
-        .from('posts') // Inserting into 'posts' table
+        .from('posts')
         .insert([newPostData]);
         
       if (error) {
@@ -168,8 +108,6 @@ const BusinessPostsPage: React.FC = () => {
       });
       
       setNewPostContent('');
-      setPostImageFile(null);
-      setImagePreview(null);
       
       queryClient.invalidateQueries({ queryKey: ['business-posts', businessId] });
     } catch (error) {
@@ -184,17 +122,15 @@ const BusinessPostsPage: React.FC = () => {
     }
   };
   
-  const handleDeletePost = async (postId: string) => {
-    if (!postId || !businessId || !user) return;
+  const handleDeletePost = async (postId: number) => {
+    if (!user) return;
     
     try {
-      // Deleting from 'posts' table
       const { error } = await supabase
         .from('posts') 
         .delete()
-        .eq('id', postId)
-        .eq('business_id', businessId) // Ensure it's for this business
-        .eq('user_id', user.id); // Ensure user owns this post (redundant if RLS handles but good for safety)
+        .eq('post_id', postId)
+        .eq('user_id', parseInt(user.id));
         
       if (error) throw error;
       
@@ -253,7 +189,7 @@ const BusinessPostsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100 pb-16">
       <div className="bg-white p-4 flex items-center">
-        <button onClick={() => navigate(`/business/manage/${businessId}`)} className="mr-3"> {/* Corrected navigation path */}
+        <button onClick={() => navigate('/business/manage')} className="mr-3">
           <ArrowLeft size={20} />
         </button>
         <div className="flex-1">
@@ -274,35 +210,6 @@ const BusinessPostsPage: React.FC = () => {
               onChange={(e) => setNewPostContent(e.target.value)}
               className="min-h-[120px] mb-4"
             />
-            
-            {imagePreview && (
-              <div className="mb-4">
-                <AspectRatio ratio={16 / 9} className="rounded-md overflow-hidden bg-gray-100">
-                  <img 
-                    src={imagePreview} 
-                    alt="Preview" 
-                    className="object-cover w-full h-full"
-                  />
-                </AspectRatio>
-              </div>
-            )}
-            
-            <div className="flex items-center mt-2">
-              <Label 
-                htmlFor="post-image" 
-                className="cursor-pointer flex items-center text-gray-500 hover:text-gray-700"
-              >
-                <Image size={18} className="mr-1" />
-                <span>Add Image</span>
-              </Label>
-              <Input 
-                id="post-image" 
-                type="file" 
-                accept="image/*"
-                onChange={handleImageChange}
-                className="hidden"
-              />
-            </div>
           </CardContent>
           <CardFooter>
             <Button 
@@ -327,17 +234,7 @@ const BusinessPostsPage: React.FC = () => {
         ) : posts.length > 0 ? (
           <div className="space-y-4">
             {posts.map((post) => (
-              <Card key={post.id} className="overflow-hidden">
-                {post.image_url && ( // Changed from post.image to post.image_url
-                  <AspectRatio ratio={16 / 9}>
-                    <img 
-                      src={post.image_url} // Changed from post.image to post.image_url
-                      alt="Post" 
-                      className="object-cover w-full h-full" 
-                    />
-                  </AspectRatio>
-                )}
-                
+              <Card key={post.post_id} className="overflow-hidden">
                 <CardContent className="p-4">
                   <p className="text-sm text-gray-500 mb-2">
                     {formatDate(post.created_at)}
@@ -346,18 +243,13 @@ const BusinessPostsPage: React.FC = () => {
                 </CardContent>
                 
                 <CardFooter className="p-4 pt-0 flex justify-between">
-                  {/* Removed likes, comments, saves display as these fields are not in the new posts table */}
-                  {/* We can add these features back later if needed */}
                   <div className="flex items-center space-x-4">
-                     {/* Example: if you want to show post type
-                     {post.post_type && <span className="text-xs text-gray-400">{post.post_type}</span>} 
-                     */}
                   </div>
                   
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() => handleDeletePost(post.id)}
+                    onClick={() => handleDeletePost(post.post_id)}
                   >
                     <Trash2 size={16} className="mr-1" />
                     Delete
