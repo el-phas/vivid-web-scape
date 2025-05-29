@@ -10,19 +10,19 @@ import CategorySection from '@/components/CategorySection';
 const Index = () => {
   const navigate = useNavigate();
 
-  // For now, we'll use mock data since the categories tables don't exist yet
+  // Mock data since the categories tables don't exist yet
   const professionalCategories = [
-    { id: 1, name: "Technology", icon: "💻" },
-    { id: 2, name: "Healthcare", icon: "🏥" },
-    { id: 3, name: "Education", icon: "📚" },
-    { id: 4, name: "Finance", icon: "💰" },
+    { id: 1, name: "Technology", icon: "💻", count: 25 },
+    { id: 2, name: "Healthcare", icon: "🏥", count: 18 },
+    { id: 3, name: "Education", icon: "📚", count: 12 },
+    { id: 4, name: "Finance", icon: "💰", count: 8 },
   ];
 
   const businessCategories = [
-    { id: 1, name: "Restaurants", icon: "🍽️" },
-    { id: 2, name: "Shopping", icon: "🛍️" },
-    { id: 3, name: "Services", icon: "🔧" },
-    { id: 4, name: "Entertainment", icon: "🎬" },
+    { id: 1, name: "Restaurants", icon: "🍽️", count: 42 },
+    { id: 2, name: "Shopping", icon: "🛍️", count: 31 },
+    { id: 3, name: "Services", icon: "🔧", count: 23 },
+    { id: 4, name: "Entertainment", icon: "🎬", count: 15 },
   ];
 
   // Mock professionals data
@@ -38,10 +38,10 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 pb-16">
-      <Header />
+      <Header locationValue="Current Location" />
       
       <div className="p-4">
-        <SearchBar onSearch={handleSearch} />
+        <SearchBar placeholder="Search for professionals and businesses..." />
         
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-4 mb-6">

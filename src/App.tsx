@@ -29,6 +29,7 @@ import BusinessProductsPage from '@/pages/BusinessProductsPage';
 import BusinessPostsPage from '@/pages/BusinessPostsPage';
 import PrivacySecurityPage from '@/pages/PrivacySecurityPage';
 import SettingsPage from '@/pages/SettingsPage';
+import PlansPage from '@/pages/PlansPage';
 
 function App() {
   return (
@@ -47,9 +48,10 @@ function App() {
             <Route path="/search" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
             <Route path="/saved" element={<ProtectedRoute><SavedPage /></ProtectedRoute>} />
             
-            {/* Privacy/Security and Settings routes */}
+            {/* Privacy/Security, Settings and Plans routes */}
             <Route path="/account/privacy" element={<ProtectedRoute><PrivacySecurityPage /></ProtectedRoute>} />
             <Route path="/account/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/plans" element={<ProtectedRoute><PlansPage /></ProtectedRoute>} />
             
             {/* Routes for business and profession management */}
             <Route path="/business/manage" element={<ProtectedRoute><BusinessManagementPage /></ProtectedRoute>} />
